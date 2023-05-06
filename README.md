@@ -1,0 +1,2 @@
+# myFindingPathAlgorithm
+Dijkstra, A*
