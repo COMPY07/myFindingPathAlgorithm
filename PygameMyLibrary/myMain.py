@@ -1,3 +1,4 @@
+import pygame
 import pygame as p
 
 Running = True
@@ -6,17 +7,24 @@ from UI.Grid import Grid as grid
 p.init()
 
 screen = p.display.set_mode([600, 600])
-Grid: grid = grid(screen, 10, 10)
+Grid: grid = grid(screen, 20, 20)
 
 
 class Node:
-    def __init__(self, parent=None, position=None, box=None):
-        self.parent = parent
-        self.position = position
+    def __init__(self, parent =None, position : tuple = None, state : int = 0):
+        self.parent : Node = parent
+        self.position : tuple = position
         self.g = 0
         self.h = 0
         self.f = 0
+        self.density = 0
         self.food_market: list = []
+        self.state = state
+
+    def setup(self, parent = None, position = None, state = 0):
+        self.parent: Node = parent
+        self.position: tuple = position
+        self.state = state
 
     def __eq__(self, other):
         # eqaul 입니다.. 객체를 비교할때 무엇을 보고 같다고 판단할지를 넘겨주는 거에용
@@ -132,21 +140,140 @@ def aStar(board, start, end):
         Grid.boardUpdate(20)
 
 
+def aStar_node(board, start, end):
+    # startNode와 endNode 초기화
+    import heapq
+
+    # 밀집도, 성향, 거리 순으로 가중치 부여, * (3 - idx);
+
+    startNode: Node = board[start[0]][start[1]]
+    endNode: Node = board[end[0]][end[1]]
+
+    # openList, closedList 초기화
+    openList: list = []
+    closedList: list = []
+
+    # openList에 시작 노드 추가
+    openList.append(startNode)
+    dx, dy = [0, 0, -1, 1, -1, -1, 1, 1], [-1, 1, 0, 0, -1, 1, -1, 1]
+    # endNode를 찾을 때까지 실행
+    while openList:
+
+        # 현재 노드 지정
+        currentNode: Node = heapq.heappop(openList)
+        # currentIdx = 0
+
+        # 이미 같은 노드가 openList에 있고, f 값이 더 크면
+        # currentNode를 openList안에 있는 값으로 교체
+        '''for index, item in enumerate(openList):
+            if item.f < currentNode.f:
+                currentNode = item
+                currentIdx = index
+
+        # openList에서 제거하고 closedList에 추가
+        openList.pop(currentIdx)'''
+        closedList.append(currentNode)
+
+        # 현재 노드가 목적지면 current.position 추가하고
+        # current의 부모로 이동
+        if currentNode == endNode:
+            path = []
+            food_markets = []
+            current = currentNode
+            while current is not None:
+                y, x = current.position
+                board[y][x] = current.f
+                path.append(current.position)
+                food_markets += current.food_market
+                print("위치 : ", current.position)  # 휴리스틱
+                current = current.parent
+
+            return path[::-1], food_markets  # reverse
+            # heapq 쓰면 reverse 안해도 되용
+
+        children: list = []
+        Grid.changeBox(Grid.getBoxbyIndex(currentNode.position[0], currentNode.position[1]), "GREEN")
+
+        for i in range(8):
+            ny, nx = currentNode.position[0] + dy[i], currentNode.position[1] + dx[i]
+
+            # 범위 체크
+            if 0 > ny or ny >= len(board) or \
+                    0 > nx or nx >= len(board[0]):
+                continue
+            if board[ny][nx].state != 0:
+                if board[ny][nx].state == 2: currentNode.food_market.append((ny, nx))
+                continue
+
+            new_node: Node = board[ny][nx]
+            children.append(new_node)
+
+        for child in children:
+
+            if child in closedList: continue
+
+            # f, g, h값 업데이트
+            child.g = currentNode.g + 1
+            child.h = ((child.position[0] - endNode.position[0]) ** 2) + \
+                      ((child.position[1] - endNode.position[1]) ** 2)  # 퓌타고라스
+            # child.h = heuristic(child, endNode) 다른 휴리스틱
+            # 위에거는 x, y 최대값을 이용해서 거리를 구하는 Diagonal Distance 입ㄴ디ㅏ.
+
+            # print("위치 : ", child.position) # 휴리스틱
+            # print("목표 로부터 거리 : ", child.h)
+
+            child.f = child.g + child.h
+
+            # 자식이 openList에 있고, g값이 더 크면 continue
+            flag: bool = False
+            for node in openList:
+                if child == node and child.g > node.g:
+                    flag = True
+                    break
+            if flag: continue
+
+            heapq.heappush(openList, child)
+        # 요 기다가 밀집도 및 다른 변수 넣어서 처리하기로
+        Grid.boardUpdate(20)
+
+
 def main():
     # 1은 장애물
 
-    myMap = [[0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-             [0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-             [0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-             [0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-             [0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-             [0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-             [0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-             [0, 0, 2, 0, 1, 0, 0, 0, 0, 0],
-             [0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
+    global Running
+    myMap = [[0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
+             [0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0],
+             [0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1],
+             [0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0],
+             [0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0],
+             [0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0],
+             [0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0],
+             [0, 0, 2, 1, 1, 0, 1, 0, 0, 0, 0, 0, 2, 1, 1, 0, 1, 0, 0, 0],
+             [0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0],
+             [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+             [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
+             [0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 0],
+             [0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1],
+             [0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0],
+             [0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0],
+             [0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0],
+             [0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0],
+             [0, 0, 2, 1, 1, 0, 1, 0, 0, 0, 0, 0, 2, 1, 1, 0, 1, 0, 1, 0],
+             [0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0],
+             [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0]]
+    board = []
+    for i in range(20):
+        tmp = []
+        for j in range(20):
+            node = Node(None, (i, j))
+            if myMap[i][j] == 1: node.setup(None, (i, j), 1)
+            elif myMap[i][j] == 2: node.setup(None, (i, j), 2)
+            tmp.append(node)
+        board.append(tmp)
+
+
     start = (0, 0)  # 현재 사용자의 위치를 노드의 위치로 변환
-    end = (0, 9)  # 등록된 놀이기구의 위치를 목표 노드로 설정
+    end = (19, 19)  # 등록된 놀이기구의 위치를 목표 노드로 설정
     for i in range(len(myMap)):
         for j in range(len(myMap[0])):
             if myMap[i][j] == 1: Grid.changeBox(Grid.getBoxbyIndex(i, j), "RED")
@@ -156,7 +283,14 @@ def main():
     for y, x in path:
         Grid.changeBox(Grid.getBoxbyIndex(y, x), "WHITE")
         Grid.boardUpdate(30)
+    import sys
+    while Running:
 
+        for i in p.event.get():
+            if i.type == p.QUIT:
+                Running = False
+    p.quit()
+    sys.exit()
     # print(board)
 
 # [[0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
